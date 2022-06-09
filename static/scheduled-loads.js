@@ -73,3 +73,33 @@ const getScheduledLoads = async () => {
             })
     }
 )()
+
+
+const postSchedLoad = () => {
+
+    const load = parseInt(document.getElementById('load').value) ;
+    const start_after_time = document.getElementById('startAfter').valueAsNumber;
+    const end_before_time = document.getElementById('endBefore').valueAsNumber;
+    const duration = parseInt(document.getElementById('duration').value);
+    const priority = parseInt(document.getElementById('priority').value);
+    const relay = parseInt(document.getElementById('relay').value);
+
+    if(!load || !start_after_time || !duration || !relay) {
+        alert("Please fill all mandatory fields");
+        return;
+    }
+
+    const scheduled_load = {load, start_after_time, end_before_time, duration, priority, relay};
+
+    document.getElementById('schedLoadForm').submit();
+
+    fetch('/api/v1/scheduled-loads', {
+        method: 'POST',
+        body: JSON.stringify({scheduled_load}),
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(resp => resp.json())
+    .catch(console.error)
+}

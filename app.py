@@ -71,7 +71,7 @@ def getScheduledLoads():
         else:
             return make_response({ 'code':'INVALID_DATA', 'status':'error', 'message':'Invalid cookie', 'details':{} }, 400)
     else:
-        schedLoad = request.get_json()['scheduled-load']
+        schedLoad = request.get_json()['scheduled_load'] if 'scheduled_load' in request.get_json() else None
         if schedLoad:
             schedLoadId = ScheduledLoadService.scheduleNewLoad(schedLoad, userIdFromCookie)
             if schedLoadId:
