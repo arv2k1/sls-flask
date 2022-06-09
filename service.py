@@ -32,11 +32,11 @@ class ScheduledLoadService:
 
     def getScheduledLoads(currentUserId):
 
-        loads = ScheduledLoadsRepo.findAll(currentUserId)
+        return ScheduledLoadsRepo.findAll(currentUserId)
 
-        return loads
+    def scheduleNewLoad(load, currentUserId):
 
-
+        return ScheduledLoadsRepo.save(load, currentUserId)
 
 
 

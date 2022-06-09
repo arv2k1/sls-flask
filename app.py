@@ -1,9 +1,17 @@
+from crypt import methods
+import sched
 from flask import Flask, Response, make_response, jsonify, request, send_from_directory
 import json
+
+from importlib_metadata import method_cache
 from service import UsersService, ScheduledLoadService
 import service
 
 app = Flask(__name__, static_url_path='')
+
+
+
+
 
 
 # User Controller
@@ -48,17 +56,30 @@ def signUp():
         resp.set_cookie('userId', user['id'])
         return resp
     return make_response({ 'code':'INVALID_DATA', 'status':'error', 'message':'User not found', 'details':{} }, 400)
+    
+    
+    
 
 # Scheduled Loads
-@app.route('/api/v1/scheduled-loads')
+@app.route('/api/v1/scheduled-loads', methods=['GET', 'POST'])
 def getScheduledLoads():
     userIdFromCookie = request.cookies.get('userId')
-    if userIdFromCookie:
-        loads = ScheduledLoadService.getScheduledLoads(userIdFromCookie)    
-        print()
-        return {'scheduled-loads': loads}
+    if request.method == 'GET':
+        if userIdFromCookie:
+            loads = ScheduledLoadService.getScheduledLoads(userIdFromCookie)    
+            return {'scheduled-loads': loads}
+        else:
+            return make_response({ 'code':'INVALID_DATA', 'status':'error', 'message':'Invalid cookie', 'details':{} }, 400)
     else:
-        return make_response({ 'code':'INVALID_DATA', 'status':'error', 'message':'Invalid cookie', 'details':{} }, 400)
+        schedLoad = request.get_json()['scheduled-load']
+        if schedLoad:
+            schedLoadId = ScheduledLoadService.scheduleNewLoad(schedLoad, userIdFromCookie)
+            if schedLoadId:
+                return make_response({'code':'SUCCESS', 'status':'success', 'message':'Scheduled successfully', 'details':{'id':schedLoadId}}, 201)
+            return make_response({ 'code':'INVALID_DATA', 'status':'error', 'message':'Failed to schedule load', 'details':{} }, 400)
+        else:
+            return make_response({ 'code':'MANDATORY_NOT_FOUND', 'status':'error', 'message':'Invalid json body', 'details':{} }, 400)
+        
 
 # ESP Api's
 @app.route('/<int:espId>/relay-status')
@@ -77,6 +98,8 @@ def postLogMessage():
     msg = request.data.decode('UTF-8')  
     print('>>> ' + msg)
     return Response(status=200)
+
+    
 
 
 if __name__ == '__main__':
