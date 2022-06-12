@@ -1,4 +1,4 @@
-from repo import UsersRepo, ScheduledLoadsRepo, MeterReadingsRepo
+from repo import EspIdConsumerIdRelRepo, UsersRepo, ScheduledLoadsRepo, MeterReadingsRepo
 
 # =========== Users ===========
 class UsersService:
@@ -33,7 +33,29 @@ class ScheduledLoadService:
     def scheduleNewLoad(load, currentUserId):
 
         return ScheduledLoadsRepo.save(load, currentUserId)
+
+    def getRelayStatus(espId):
+
+        consumerId = EspIdConsumerIdRelRepo.findConsumerIdByEspId(espId)
+
+        runningLoads = ScheduledLoadService.__getRunningLoads(consumerId)
+
+        status = [0] * 2
+
+        for load in runningLoads:
+            relay = load['relay']
+            status[relay] = 1
         
+        return { 'relay-status' : status }
+
+    def __getRunningLoads(consumerId):
+        
+        ScheduledLoadsRepo.updateRunningStatus()
+
+        loads = ScheduledLoadsRepo.findAll(consumerId)
+        runningLoads = list(filter(lambda load: load['status'] == 1, loads))
+        
+        return runningLoads
         
 
 # =========== Meter readings ===========
@@ -63,16 +85,3 @@ class MeterReadingsService:
             res['regular_meter'] = id
         
         return res
-        
-        
-        
-
-def getRelayStatus(espId):
-    num = 0
-    with open('temp.txt', 'r') as file:
-        num = int(file.readline())
-
-    with open('temp.txt', 'w') as file:
-        file.write(str(1 - num))
-
-    return { 'relay-status' : [num] * 2}

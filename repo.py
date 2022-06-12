@@ -135,7 +135,22 @@ class ScheduledLoadsRepo:
                 print('Exception in ScheduledLoadsRepo::save => ', e)
                 return None
 
-    def update(schedLoadId, startTime, endTime, status, currentUserId):
+    def updateRunningStatus():
+
+        now = int(time.time_ns() / 1e6)
+        print(now)
+
+        with sql.connect('sls.db') as conn:
+            try:
+                conn.execute("UPDATE scheduledloads SET status = 1 WHERE start_time IS NOT NULL AND end_time IS NOT NULL AND start_time <= ? AND end_time >= ?", (now, now))
+                conn.commit()
+                conn.execute("UPDATE scheduledloads SET status = 2 WHERE start_time IS NOT NULL AND end_time IS NOT NULL AND start_time <= ? AND end_time <= ?", (now, now))
+                return True
+            except Exception as e:
+                print('Exception in ScheduledLoadsRepo::updateRunningStatus => ', e)
+                return False
+
+    def update(schedLoadId, startTime, endTime, currentUserId):
         return
         with sql.connect('sls.db') as conn:
             try:
@@ -217,6 +232,17 @@ class EspIdConsumerIdRelRepo:
                 cursor = conn.execute("SELECT * FROM esp_id_consumer_id_rel WHERE consumer_id = ?", (consumerId,))
                 for row in cursor:
                     return row[0]
+                return None
+            except Exception as e:
+                print('Exception in EspIdConsumerIdRelRepo::findEspIdByConsumerId => ', e)
+                return None
+
+    def findConsumerIdByEspId(espId):
+        with sql.connect('sls.db') as conn:
+            try:
+                cursor = conn.execute("SELECT * FROM esp_id_consumer_id_rel WHERE esp_id = ?", (espId,))
+                for row in cursor:
+                    return row[1]
                 return None
             except Exception as e:
                 print('Exception in EspIdConsumerIdRelRepo::findConsumerIdByEspId => ', e)

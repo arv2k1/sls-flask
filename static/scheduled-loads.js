@@ -39,7 +39,7 @@ const getTableRowElement = (schedLoad) => {
     tr.appendChild(duration);
 
     const priority = document.createElement('td');
-    priority.textContent = schedLoad['priority'] || '5';
+    priority.textContent = schedLoad['priority'];
     tr.appendChild(priority);
     
     const relay = document.createElement('td');

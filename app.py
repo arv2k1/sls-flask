@@ -95,7 +95,7 @@ def getMeterReadings():
 # ESP Api's
 @app.route('/<int:espId>/relay-status')
 def getRelayStatus(espId):
-    return service.getRelayStatus(espId)
+    return ScheduledLoadService.getRelayStatus(espId)
 
 @app.route('/<int:espId>/meter-readings', methods = ['POST'])
 def postMeterReadings(espId):
