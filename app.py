@@ -1,10 +1,5 @@
-from crypt import methods
-import sched
-from flask import Flask, Response, make_response, jsonify, request, send_from_directory
-import json
-
-from importlib_metadata import method_cache
-from service import UsersService, ScheduledLoadService
+from flask import Flask, Response, make_response, jsonify, request
+from service import UsersService, ScheduledLoadService, MeterReadingsService
 import service
 
 app = Flask(__name__, static_url_path='')
@@ -79,7 +74,23 @@ def getScheduledLoads():
             return make_response({ 'code':'INVALID_DATA', 'status':'error', 'message':'Failed to schedule load', 'details':{} }, 400)
         else:
             return make_response({ 'code':'MANDATORY_NOT_FOUND', 'status':'error', 'message':'Invalid json body', 'details':{} }, 400)
+            
+            
+            
         
+
+# Meter readings
+@app.route('/api/v1/meter-readings')
+def getMeterReadings():
+    userIdFromCookie = request.cookies.get('userId')
+    if userIdFromCookie:
+        return MeterReadingsService.getLatestReading(userIdFromCookie)
+    else:
+        return make_response({ 'code':'INVALID_DATA', 'status':'error', 'message':'Invalid cookie', 'details':{} }, 400)
+
+    
+    
+    
 
 # ESP Api's
 @app.route('/<int:espId>/relay-status')
@@ -89,9 +100,9 @@ def getRelayStatus(espId):
 @app.route('/<int:espId>/meter-readings', methods = ['POST'])
 def postMeterReadings(espId):
     meterReadings = request.get_json()
-    print(json.dumps(meterReadings, indent=4))
-    # service.saveMeterReadings(espId, meterReadings)
-    return Response(status=201)
+    # print(json.dumps(meterReadings, indent=4))
+    res = MeterReadingsService.saveMeterReadings(meterReadings, espId)
+    return make_response(res, 201)
 
 @app.route('/log', methods = ['POST'])
 def postLogMessage():

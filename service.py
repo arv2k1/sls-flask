@@ -1,10 +1,6 @@
-from calendar import c
-import json
-import time
-from repo import UsersRepo, ScheduledLoadsRepo
+from repo import UsersRepo, ScheduledLoadsRepo, MeterReadingsRepo
 
 # =========== Users ===========
-
 class UsersService:
 
     def getUser(id, password, role='CONSUMER'):
@@ -37,9 +33,39 @@ class ScheduledLoadService:
     def scheduleNewLoad(load, currentUserId):
 
         return ScheduledLoadsRepo.save(load, currentUserId)
+        
+        
 
+# =========== Meter readings ===========
+class MeterReadingsService:
+    SCHEDULED_METER = 0
+    REGULAR_METER = 1
 
+    def getLatestReading(currentUserId):
+        schedReading = MeterReadingsRepo.findByMaxTimeForGivenMeterType(MeterReadingsService.SCHEDULED_METER, currentUserId)
+        regReading = MeterReadingsRepo.findByMaxTimeForGivenMeterType(MeterReadingsService.REGULAR_METER, currentUserId)
 
+        return {
+            'scheduled_meter': schedReading,
+            'regular_meter': regReading
+        }
+
+    def saveMeterReadings(meterReadings, espId):
+        res = {}
+        if 'scheduled_meter' in meterReadings:
+            schedReading = meterReadings['scheduled_meter']
+            id = MeterReadingsRepo.save(schedReading, MeterReadingsService.SCHEDULED_METER, espId)
+            res['scheduled_meter'] = id
+
+        if 'regular_meter' in meterReadings:
+            schedReading = meterReadings['regular_meter']
+            id = MeterReadingsRepo.save(schedReading, MeterReadingsService.REGULAR_METER, espId)
+            res['regular_meter'] = id
+        
+        return res
+        
+        
+        
 
 def getRelayStatus(espId):
     num = 0
@@ -50,47 +76,3 @@ def getRelayStatus(espId):
         file.write(str(1 - num))
 
     return { 'relay-status' : [num] * 2}
-
-
-def saveMeterReadings(espId, meterReadings):
-
-    jsonStr = ''
-
-    with open('meterReadings.json', 'r') as file:
-
-        mrJson = json.load(file)
-        
-        timeInMillis = time.time_ns()
-
-        mrJson[str(espId)]["scheduled-meter"][str(timeInMillis)] = meterReadings['scheduled-meter']
-        mrJson[str(espId)]["regular-meter"][str(timeInMillis)] = meterReadings['regular-meter']
-
-        jsonStr = json.dumps(mrJson, indent=4)
-
-    with open('meterReadings.json', 'w') as file:
-        file.write(jsonStr)
-
-def getMeterReadings(houseId):
-    espId = houseId
-
-    meterReading = {}
-    
-    with open('meterReadings.json', 'r') as file:
-    
-        meterReadingsJson = json.load(file)
-
-        curHouseJson = meterReadingsJson[str(espId)]
-        
-        schedJson = curHouseJson['scheduled-meter']
-        regularJson = curHouseJson['regular-meter']
-        
-        lastSchedReadingTime = max([key for key in schedJson.keys()])
-        lastRegularReadingTime = max([key for key in regularJson.keys()])
-        
-        lastSchedReading = schedJson[lastSchedReadingTime]
-        lastRegularReading = regularJson[lastRegularReadingTime]
-
-        meterReading['scheduled-meter'] = lastSchedReading
-        meterReading['regular-meter'] = lastRegularReading
-
-    return meterReading

@@ -1,4 +1,6 @@
 import sqlite3 as sql
+import time
+from datetime import datetime
 
 create_users_table = '''
     create table users (
@@ -29,7 +31,29 @@ create_schedloads_table = '''
     )
 '''
 
-init_queries = [create_users_table, insert_admin_user, create_schedloads_table]
+create_meter_readings_table = '''
+    create table meter_readings (
+        id integer primary key not null,
+        voltage real,
+        current real,
+        pf real,
+        frequency real,
+        power real,
+        energy real,
+        esp_id not null,
+        meter_type not null,
+        time_of_reading integer not null
+    )
+'''
+
+create_esp_id_consumer_id_rel_table = '''
+    create table esp_id_consumer_id_rel (
+        esp_id integer not null,
+        consumer_id integer not null
+    )
+'''
+
+init_queries = [create_users_table, insert_admin_user, create_schedloads_table, create_meter_readings_table, create_esp_id_consumer_id_rel_table]
 
 def initDB():
     conn = sql.connect('sls.db')
@@ -137,6 +161,78 @@ class ScheduledLoadsRepo:
             'end_time': row[9]
         }
 
+class MeterReadingsRepo:
+
+    def findByMaxTimeForGivenMeterType(meterType, consumerId):
+        espId = EspIdConsumerIdRelRepo.findEspIdByConsumerId(consumerId)
+        with sql.connect('sls.db') as conn:
+            try:
+                cursor = conn.execute("SELECT * FROM meter_readings WHERE esp_id = ? AND meter_type = ? ORDER BY time_of_reading DESC LIMIT 1", (espId, meterType))
+                meterReading = [MeterReadingsRepo.mapRowToMeterReadingDict(row) for row in cursor][0]
+                return meterReading
+            except Exception as e:
+                print('Exception in MeterReadingsRepo::findByMaxTimeForGivenMeterType => ', e)
+                return None
+
+
+    def save(meterReading, meterType, espId):
+        with sql.connect('sls.db') as conn:
+            try:
+                values = tuple(meterReading.values()) + (espId, meterType, time.time_ns())
+
+                q = "INSERT INTO meter_readings(" 
+                q += ', '.join(list(map(lambda x: f"'{x}'", list(meterReading.keys()) + ['esp_id', 'meter_type', 'time_of_reading'])))
+                q += ") VALUES ("
+                q += ', '.join(['?'] * (len(meterReading.keys()) + 3))
+                q += ")"
+
+                cursor = conn.execute(q, values)
+                return cursor.lastrowid
+            except Exception as e:
+                print('Exception in EspIdConsumerIdRelRepo::save => ', e)
+                return None
+
+    def mapRowToMeterReadingDict(row):
+        
+        ns = row[9]
+        secs = ns / 1e9
+        dt = datetime.fromtimestamp(secs)
+        text = dt.strftime('%d-%m-%Y %H:%M:%S')
+
+        return {
+            'voltage': row[1],
+            'current': row[2],
+            'pf': row[3],
+            'frequency': row[4],
+            'power': row[5],
+            'energy': row[6],
+            'time_of_reading': text
+        }
+
+class EspIdConsumerIdRelRepo:
+
+    def findEspIdByConsumerId(consumerId):
+        with sql.connect('sls.db') as conn:
+            try:
+                cursor = conn.execute("SELECT * FROM esp_id_consumer_id_rel WHERE consumer_id = ?", (consumerId,))
+                for row in cursor:
+                    return row[0]
+                return None
+            except Exception as e:
+                print('Exception in EspIdConsumerIdRelRepo::findConsumerIdByEspId => ', e)
+                return None
+
+    def save(espId, consumerId):
+        with sql.connect('sls.db') as conn:
+            try:
+                conn.execute("INSERT INTO esp_id_consumer_id_rel values(?, ?)", (espId, consumerId))
+                return True
+            except Exception as e:
+                print('Exception in EspIdConsumerIdRelRepo::save => ', e)
+                return False
+
+
+
 if __name__ == '__main__':
 
     print('======= SLS Repo ========')
@@ -148,41 +244,47 @@ if __name__ == '__main__':
     # UsersRepo.save({'name':'Aravind', 'password':'1234'})
     # UsersRepo.save({'name':'Vasanth', 'password':'1234'})
 
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10002)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10002)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10002)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10002)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10002)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10002)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10002)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10002)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10002)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10002)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10002)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10002)
 
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
-    ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
+    # ScheduledLoadsRepo.save({'load':10, 'start_after_time':1654687800000, 'end_before_time':1654702200000, 'duration':60, 'priority':5, 'relay':1}, 10003)
     
     # ScheduledLoadsRepo.save({'load':10, 'start_after_time':None, 'end_before_time':None, 'duration':60, 'priority':None, 'relay':1}, 10002)
     # ScheduledLoadsRepo.save({'load':10, 'duration':60, 'relay':1}, 10002)
 
     # print(ScheduledLoadsRepo.findAll(10002))
 
+    # EspIdConsumerIdRelRepo.save(1, 10002)
+    # EspIdConsumerIdRelRepo.save(2, 10003)
+
+    # print(EspIdConsumerIdRelRepo.findEspIdByConsumerId(10002))
+
+    # print(MeterReadingsRepo.findByMaxTimeForGivenMeterType(0, 10002))
