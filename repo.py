@@ -109,11 +109,47 @@ class ScheduledLoadsRepo:
     def findAll(currentUserId):
         with sql.connect('sls.db') as conn:
             try:
-                cursor = conn.execute("SELECT * FROM scheduledloads WHERE created_by = ?", (currentUserId,))
+                cursor = conn.execute("SELECT * FROM scheduledloads WHERE created_by = ? ORDER BY id DESC", (currentUserId,))
                 schedLoads = [ScheduledLoadsRepo.mapRowToSchedLoadDict(row) for row in cursor]
                 return schedLoads
             except Exception as e:
                 print('Exception in ScheduledLoadsRepo::findAll => ', e)
+                return []
+
+    def findById(id, currentUserId):
+        with sql.connect('sls.db') as conn:
+            try:
+                cursor = conn.execute("SELECT * FROM scheduledloads WHERE id = ? AND created_by = ?", (id, currentUserId))
+                schedLoads = [ScheduledLoadsRepo.mapRowToSchedLoadDict(row) for row in cursor]
+                return schedLoads[0]
+            except Exception as e:
+                print('Exception in ScheduledLoadsRepo::findById => ', e)
+                return None
+
+    def findAllSchedulable(currentUserId, relayId):
+        now = int(time.time_ns() / 1e6)
+        with sql.connect('sls.db') as conn:
+            try:
+                q = '''
+                    SELECT * FROM scheduledloads
+                    WHERE 
+                        created_by = ? AND
+                        start_time IS NULL AND 
+                        end_time IS NULL AND
+                        relay = ? AND
+                        start_after_time <= ? AND
+                        (end_before_time > ? OR end_before_time IS NULL)
+                    ORDER BY priority DESC
+                '''
+                
+                cursor = conn.execute(q, (currentUserId, relayId, now, now))
+                schedLoads = [ScheduledLoadsRepo.mapRowToSchedLoadDict(row) for row in cursor]
+
+                print(schedLoads)
+
+                return schedLoads
+            except Exception as e:
+                print('Exception in ScheduledLoadsRepo::findAllSchedulable => ', e)
                 return []
 
     def save(schedLoad, currentUserId):
@@ -138,29 +174,29 @@ class ScheduledLoadsRepo:
     def updateRunningStatus():
 
         now = int(time.time_ns() / 1e6)
-        print(now)
 
         with sql.connect('sls.db') as conn:
             try:
                 conn.execute("UPDATE scheduledloads SET status = 1 WHERE start_time IS NOT NULL AND end_time IS NOT NULL AND start_time <= ? AND end_time >= ?", (now, now))
                 conn.commit()
                 conn.execute("UPDATE scheduledloads SET status = 2 WHERE start_time IS NOT NULL AND end_time IS NOT NULL AND start_time <= ? AND end_time <= ?", (now, now))
+                conn.commit()
+                conn.execute("UPDATE scheduledloads SET status = -1 WHERE start_time IS NULL AND end_time IS NULL AND end_before_time <= ?", (now, ))
+                conn.commit()
                 return True
             except Exception as e:
                 print('Exception in ScheduledLoadsRepo::updateRunningStatus => ', e)
                 return False
 
-    def update(schedLoadId, startTime, endTime, currentUserId):
-        return
+    def update(schedLoadId, startTime, endTime):
         with sql.connect('sls.db') as conn:
             try:
-                cursor = conn.cursor()
-                cursor.execute('', ())
+                conn.execute('UPDATE scheduledloads SET start_time = ?, end_time = ?, status = 1 WHERE id = ?', (startTime, endTime, schedLoadId))
                 conn.commit()
-                return cursor.lastrowid
+                return True
             except Exception as e:
-                print('Exception in ScheduledLoadsRepo::save => ', e)
-                return None
+                print('Exception in ScheduledLoadsRepo::update => ', e)
+                return False
 
     def mapRowToSchedLoadDict(row):
         return {
@@ -182,7 +218,7 @@ class MeterReadingsRepo:
         espId = EspIdConsumerIdRelRepo.findEspIdByConsumerId(consumerId)
         with sql.connect('sls.db') as conn:
             try:
-                cursor = conn.execute("SELECT * FROM meter_readings WHERE esp_id = ? AND meter_type = ? ORDER BY time_of_reading DESC LIMIT 1", (espId, meterType))
+                cursor = conn.execute("SELECT * FROM meter_readings WHERE esp_id = ? AND meter_type = ? AND voltage IS NOT null ORDER BY time_of_reading DESC LIMIT 1", (espId, meterType))
                 meterReading = [MeterReadingsRepo.mapRowToMeterReadingDict(row) for row in cursor][0]
                 return meterReading
             except Exception as e:
@@ -193,7 +229,7 @@ class MeterReadingsRepo:
     def save(meterReading, meterType, espId):
         with sql.connect('sls.db') as conn:
             try:
-                values = tuple(meterReading.values()) + (espId, meterType, time.time_ns())
+                values = tuple(meterReading.values()) + (espId, meterType, int(time.time_ns()/1e6))
 
                 q = "INSERT INTO meter_readings(" 
                 q += ', '.join(list(map(lambda x: f"'{x}'", list(meterReading.keys()) + ['esp_id', 'meter_type', 'time_of_reading'])))
@@ -209,10 +245,12 @@ class MeterReadingsRepo:
 
     def mapRowToMeterReadingDict(row):
         
-        ns = row[9]
-        secs = ns / 1e9
-        dt = datetime.fromtimestamp(secs)
-        text = dt.strftime('%d-%m-%Y %H:%M:%S')
+        # ns = row[9]
+        # secs = ns / 1e9
+        # dt = datetime.fromtimestamp(secs)
+        # text = dt.strftime('%d-%m-%Y %H:%M:%S')
+
+        # text = int(ns / 1e6)
 
         return {
             'voltage': row[1],
@@ -221,7 +259,7 @@ class MeterReadingsRepo:
             'frequency': row[4],
             'power': row[5],
             'energy': row[6],
-            'time_of_reading': text
+            'time_of_reading': row[9]
         }
 
 class EspIdConsumerIdRelRepo:
@@ -314,3 +352,7 @@ if __name__ == '__main__':
     # print(EspIdConsumerIdRelRepo.findEspIdByConsumerId(10002))
 
     # print(MeterReadingsRepo.findByMaxTimeForGivenMeterType(0, 10002))
+
+    # print(len(ScheduledLoadsRepo.findAllSchedulable(10003, 2)))
+
+    # ScheduledLoadsRepo.update(95, 123, 123)

@@ -74,8 +74,16 @@ def getScheduledLoads():
             return make_response({ 'code':'INVALID_DATA', 'status':'error', 'message':'Failed to schedule load', 'details':{} }, 400)
         else:
             return make_response({ 'code':'MANDATORY_NOT_FOUND', 'status':'error', 'message':'Invalid json body', 'details':{} }, 400)
-            
-            
+
+
+@app.route('/api/v1/scheduled-loads/<int:schedLoadId>')
+def getScheduledLoad(schedLoadId):
+    userIdFromCookie = request.cookies.get('userId')
+    if userIdFromCookie:
+        load = ScheduledLoadService.getScheduledLoad(schedLoadId, userIdFromCookie)
+        return {'scheduled-load': load}
+    else:
+        return make_response({ 'code':'INVALID_DATA', 'status':'error', 'message':'Invalid cookie', 'details':{} }, 400)
             
         
 

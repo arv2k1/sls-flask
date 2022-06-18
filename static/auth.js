@@ -29,7 +29,7 @@ const setCurrentUser = () => {
                 redirectToLoginPage();
             }
         })
-        .catch(error => {console.log(error); alert('An Error Occurred')})
+        .catch(error => console.log(error))
 }
 
 (
